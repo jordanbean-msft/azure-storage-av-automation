@@ -4,14 +4,14 @@ $JobName = "StartRunLoopScanHttpServer"
 
 cd $ScanHttpServerFolder
 Start-Transcript -Path runLoopStartup.log
-Write-Host Install .net 5 sdk + runtime
+Write-Host Install .net 6 sdk + runtime
 if (-Not (Test-Path $ScanHttpServerFolder\dotnet-install.ps1)){
     Write-Host dotnet-install script doesnt exist, Downloading
     Invoke-WebRequest "https://dotnet.microsoft.com/download/dotnet/scripts/v1/dotnet-install.ps1" -OutFile $ScanHttpServerFolder\dotnet-install.ps1
 }
 
 Write-Host Installing dotnet Runtime
-.\dotnet-install.ps1 -Channel 5.0 -Runtime dotnet
+.\dotnet-install.ps1 -Channel 6.0 -Runtime dotnet
 
 Write-Host Starting Process $ExePath
 while($true){

@@ -34,7 +34,7 @@ resource buildArtifactContainer 'Microsoft.Storage/storageAccounts/blobServices/
   name: '${functionAppStorageAccountName}/default/${buildArtifactContainerName}'
 }
 
-var buildArtifactContainerUrlPrefix = 'https://${functionAppStorageAccount.name}.blob.core.windows.net/${buildArtifactContainer.name}'
+var buildArtifactContainerUrlPrefix = 'https://${functionAppStorageAccount.name}.blob.core.windows.net/${buildArtifactContainerName}'
 
 resource vmssVirusScanner 'Microsoft.Compute/virtualMachineScaleSets@2022-03-01' = {
   name: vmssVirusScannerName
@@ -121,7 +121,7 @@ resource vmssVirusScanner 'Microsoft.Compute/virtualMachineScaleSets@2022-03-01'
                 ]
                 commandToExecute: 'powershell.exe -ExecutionPolicy Bypass -File VMInit.ps1 "${buildArtifactContainerUrlPrefix}/${virusScanHttpServerPackageName}"'
                 managedIdentity: {
-                  clientId: managedIdentity.properties.clientId
+                  objectId: managedIdentity.properties.principalId
                 }
               }
             }

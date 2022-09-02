@@ -73,7 +73,7 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
         }
         {
           name: 'WEBSITE_CONTENTSHARE'
-          value: toLower('${functionScanBlobAppName}')
+          value: uniqueString(functionScanBlobAppName)
         }
         {
           name: 'AZURE_UPLOAD_BLOBS_STORAGE_ACCOUNT_NAME'

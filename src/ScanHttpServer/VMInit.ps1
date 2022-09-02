@@ -16,7 +16,13 @@ if($args.Count -gt 0){
 $ScanHttpServerBinZipUrl = Get-Content $ScanHttpServerFolder\vminit.config
 
 # Download Http Server bin files
-Invoke-WebRequest $ScanHttpServerBinZipUrl -OutFile $ScanHttpServerFolder\ScanHttpServer.zip
+$response = Invoke-WebRequest -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fstorage.azure.com%2F' `
+                              -Headers @{Metadata="true"}
+$content =$response.Content | ConvertFrom-Json
+$access_token = $content.access_token
+
+Invoke-WebRequest $ScanHttpServerBinZipUrl -Headers @{ Authorization ="Bearer $access_token"} -OutFile $ScanHttpServerFolder\ScanHttpServer.zip
+
 Expand-Archive $ScanHttpServerFolder\ScanHttpServer.zip -DestinationPath $ScanHttpServerFolder\ -Force
 
 cd $ScanHttpServerFolder
