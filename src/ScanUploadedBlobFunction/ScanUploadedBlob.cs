@@ -28,7 +28,7 @@ namespace ScanUploadedBlobFunction
 
       _logger.LogInformation($"Processing blob - Name:{blobName} Size: {blobSize} Bytes");
 
-      var scannerHost = Environment.GetEnvironmentVariable("WINDOWS_DEFNDER_HOST");
+      var scannerHost = Environment.GetEnvironmentVariable("WINDOWS_DEFENDER_HOST");
       var scannerPort = Environment.GetEnvironmentVariable("WINDOWS_DEFENDER_PORT");
 
       var scanner = new ScannerProxy(_logger, scannerHost);
@@ -36,7 +36,7 @@ namespace ScanUploadedBlobFunction
       BlobClient downloadBlobClient = new BlobClient(new Uri(blobUrl),
                                                      new DefaultAzureCredential(new DefaultAzureCredentialOptions
                                                      {
-                                                       ManagedIdentityClientId = Environment.GetEnvironmentVariable("ManagedIdentityClientId")
+                                                       ManagedIdentityClientId = Environment.GetEnvironmentVariable("MANAGED_IDENTITY_CLIENT_ID")
                                                      }));
 
       var blobStream = await downloadBlobClient.OpenReadAsync();

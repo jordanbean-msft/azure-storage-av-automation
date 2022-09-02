@@ -1,27 +1,29 @@
+$ErrorActionPreference = "Stop"
+
 #Init
 $ScanHttpServerFolder = "C:\ScanHttpServer\bin"
 $runLoopPath = "$ScanHttpServerFolder\runLoop.ps1"
 
 Start-Transcript -Path C:\VmInit.log
-New-Item -ItemType Directory C:\ScanHttpServer
-New-Item -ItemType Directory $ScanHttpServerFolder
+New-Item -ItemType Directory C:\ScanHttpServer -Force
+New-Item -ItemType Directory $ScanHttpServerFolder -Force
 
-if($args.Count -gt 0){
-    if(-Not (Test-Path $ScanHttpServerFolder\vminit.config)){
-        New-Item $ScanHttpServerFolder\vminit.config
-    }
-    Set-Content $ScanHttpServerFolder\vminit.config $args[0]
+if ($args.Count -gt 0) {
+  if (-Not (Test-Path $ScanHttpServerFolder\vminit.config)) {
+    New-Item $ScanHttpServerFolder\vminit.config
+  }
+  Set-Content $ScanHttpServerFolder\vminit.config $args[0]
 }
 
 $ScanHttpServerBinZipUrl = Get-Content $ScanHttpServerFolder\vminit.config
 
 # Download Http Server bin files
 $response = Invoke-WebRequest -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fstorage.azure.com%2F' `
-                              -Headers @{Metadata="true"}
-$content =$response.Content | ConvertFrom-Json
+  -Headers @{Metadata = "true" } -UseBasicParsing
+$content = $response.Content | ConvertFrom-Json
 $access_token = $content.access_token
 
-Invoke-WebRequest $ScanHttpServerBinZipUrl -Headers @{ Authorization ="Bearer $access_token"} -OutFile $ScanHttpServerFolder\ScanHttpServer.zip
+Invoke-WebRequest $ScanHttpServerBinZipUrl -Headers @{ Authorization = "Bearer $access_token"; "x-ms-version" = "2020-04-08" } -OutFile $ScanHttpServerFolder\ScanHttpServer.zip -UseBasicParsing
 
 Expand-Archive $ScanHttpServerFolder\ScanHttpServer.zip -DestinationPath $ScanHttpServerFolder\ -Force
 
@@ -35,7 +37,7 @@ Write-Host Creating and adding certificate
 
 $cert = New-SelfSignedCertificate -DnsName ScanServerCert -CertStoreLocation "Cert:\LocalMachine\My"
 $thumb = $cert.Thumbprint
-$appGuid = '{'+[guid]::NewGuid().ToString()+'}'
+$appGuid = '{' + [guid]::NewGuid().ToString() + '}'
 
 Write-Host successfully created new certificate $cert
 

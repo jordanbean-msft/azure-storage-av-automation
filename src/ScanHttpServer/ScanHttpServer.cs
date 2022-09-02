@@ -12,148 +12,153 @@ using System.Linq;
 
 namespace ScanHttpServer
 {
-    public class ScanHttpServer
+  public class ScanHttpServer
+  {
+
+    private enum RequestType { SCAN, HEALTH }
+
+    public static async Task HandleRequestAsync(HttpListenerContext context)
     {
-        
-        private enum requestType { SCAN }
+      var request = context.Request;
+      var response = context.Response;
 
-        public static async Task HandleRequestAsync(HttpListenerContext context)
-        {
-            var request = context.Request;
-            var response = context.Response;
+      Log.Information("Got new request {requestUrl}", request.Url);
+      Log.Information("Raw URL: {requestRawUrl}", request.RawUrl);
+      Log.Information("request.ContentType: {requestContentType}", request.ContentType);
 
-            Log.Information("Got new request {requestUrl}", request.Url);
-            Log.Information("Raw URL: {requestRawUrl}", request.RawUrl);
-            Log.Information("request.ContentType: {requestContentType}", request.ContentType);
-
-            var requestTypeTranslation = new Dictionary<string, requestType>
+      var requestTypeTranslation = new Dictionary<string, RequestType>
             {
-                { "/scan", requestType.SCAN }
+                { "/scan", RequestType.SCAN },
+                { "/health", RequestType.HEALTH }
             };
 
-            requestType type = requestTypeTranslation[request.RawUrl];
+      RequestType type = requestTypeTranslation[request.RawUrl];
 
-            switch (type)
-            {
-                case requestType.SCAN:
-                    ScanRequest(request, response);
-                    break;
-                default:
-                    Log.Information("No valid request type");
-                    break;
-            }
-            Log.Information("Done Handling Request {requestUrl}", request.Url);
-        }
+      switch (type)
+      {
+        case RequestType.SCAN:
+          ScanRequest(request, response);
+          break;
+        case RequestType.HEALTH:
+          SendResponse(response, HttpStatusCode.OK, "OK");
+          break;
+        default:
+          Log.Information("No valid request type");
+          break;
+      }
+      Log.Information("Done Handling Request {requestUrl}", request.Url);
+    }
 
-        public static void ScanRequest(HttpListenerRequest request, HttpListenerResponse response)
+    public static void ScanRequest(HttpListenerRequest request, HttpListenerResponse response)
+    {
+      if (!request.ContentType.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+      {
+        Log.Error("Wrong request Content-type for scanning, {requestContentType}", request.ContentType);
+        return;
+      };
+
+      var scanner = new WindowsDefenderScanner();
+      var parser = MultipartFormDataParser.Parse(request.InputStream);
+      var file = parser.Files.First();
+      Log.Information("filename: {fileName}", file.FileName);
+      string tempFileName = FileUtilities.SaveToTempFile(file.Data);
+      if (tempFileName == null)
+      {
+        Log.Error("Can't save the file received in the request");
+        return;
+      }
+
+      var result = scanner.Scan(tempFileName);
+
+      if (result.isError)
+      {
+        Log.Error("Error during the scanning Error message:{errorMessage}", result.errorMessage);
+
+        var data = new
         {
-            if (!request.ContentType.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase))
-            {
-                Log.Error("Wrong request Content-type for scanning, {requestContentType}", request.ContentType);
-                return;
-            };
+          ErrorMessage = result.errorMessage,
+        };
 
-            var scanner = new WindowsDefenderScanner();
-            var parser = MultipartFormDataParser.Parse(request.InputStream);
-            var file = parser.Files.First();
-            Log.Information("filename: {fileName}", file.FileName);
-            string tempFileName = FileUtilities.SaveToTempFile(file.Data);
-            if (tempFileName == null)
-            {
-                Log.Error("Can't save the file received in the request");
-                return;
-            }
+        SendResponse(response, HttpStatusCode.InternalServerError, data);
+        return;
+      }
 
-            var result = scanner.Scan(tempFileName);
+      var responseData = new
+      {
+        FileName = file.FileName,
+        isThreat = result.isThreat,
+        ThreatType = result.threatType
+      };
 
-            if(result.isError)
-            {
-                Log.Error("Error during the scanning Error message:{errorMessage}", result.errorMessage);
+      SendResponse(response, HttpStatusCode.OK, responseData);
 
-                var data = new
-                {
-                    ErrorMessage = result.errorMessage,
-                };
+      try
+      {
+        File.Delete(tempFileName);
+      }
+      catch (Exception e)
+      {
+        Log.Error(e, "Exception caught when trying to delete temp file:{tempFileName}.", tempFileName);
+      }
+    }
 
-                SendResponse(response, HttpStatusCode.InternalServerError, data);
-                return;
-            }
+    private static void SendResponse(
+        HttpListenerResponse response,
+        HttpStatusCode statusCode,
+        object responseData)
+    {
+      response.StatusCode = (int)statusCode;
+      string responseString = JsonConvert.SerializeObject(responseData);
+      byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+      response.ContentLength64 = buffer.Length;
+      var responseOutputStream = response.OutputStream;
+      try
+      {
+        responseOutputStream.Write(buffer, 0, buffer.Length);
+      }
+      finally
+      {
+        Log.Information("Sending response, {statusCode}:{responseString}", statusCode, responseString);
+        responseOutputStream.Close();
+      }
+    }
 
-            var responseData = new
-            {
-                FileName = file.FileName,
-                isThreat = result.isThreat,
-                ThreatType = result.threatType
-            };
+    public static void SetUpLogger(string logFileName)
+    {
+      string runDirPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+      string logFilePath = Path.Combine(runDirPath, "log", logFileName);
+      Log.Logger = new LoggerConfiguration()
+          .Enrich.WithExceptionDetails()
+          .WriteTo.File(logFilePath)
+          .WriteTo.Console()
+          .MinimumLevel.Debug()
+          .CreateLogger();
+    }
 
-            SendResponse(response, HttpStatusCode.OK, responseData);
-
-            try{
-                File.Delete(tempFileName);
-            }
-            catch (Exception e)
-            {
-                Log.Error(e, "Exception caught when trying to delete temp file:{tempFileName}.", tempFileName);
-            }
-        }
-
-        private static void SendResponse(
-            HttpListenerResponse response,
-            HttpStatusCode statusCode,
-            object responseData)
-        {
-            response.StatusCode = (int)statusCode;
-            string responseString = JsonConvert.SerializeObject(responseData);
-            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-            response.ContentLength64 = buffer.Length;
-            var responseOutputStream = response.OutputStream;
-            try
-            {
-                responseOutputStream.Write(buffer, 0, buffer.Length);
-            }
-            finally
-            {
-                Log.Information("Sending response, {statusCode}:{responseString}", statusCode, responseString);
-                responseOutputStream.Close();
-            }
-        }
-
-        public static void SetUpLogger(string logFileName)
-        {
-            string runDirPath = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            string logFilePath = Path.Combine(runDirPath, "log", logFileName);
-            Log.Logger = new LoggerConfiguration()
-                .Enrich.WithExceptionDetails()
-                .WriteTo.File(logFilePath)
-                .WriteTo.Console()
-                .MinimumLevel.Debug()
-                .CreateLogger();
-        }
-
-        public static void Main(string[] args)
-        {
-            int port = 443;
-            string[] prefix = {
+    public static void Main(string[] args)
+    {
+      int port = 443;
+      string[] prefix = {
                 $"https://+:{port}/"
             };
 
-            SetUpLogger("ScanHttpServer.log");
-            var listener = new HttpListener();
+      SetUpLogger("ScanHttpServer.log");
+      var listener = new HttpListener();
 
-            foreach (string s in prefix)
-            {
-                listener.Prefixes.Add(s);
-            }
+      foreach (string s in prefix)
+      {
+        listener.Prefixes.Add(s);
+      }
 
-            listener.Start();
-            Log.Information("Starting ScanHttpServer");
+      listener.Start();
+      Log.Information("Starting ScanHttpServer");
 
-            while (true)
-            {
-                Log.Information("Waiting for requests...");
-                var context = listener.GetContext();
-                Task.Run(() => HandleRequestAsync(context));
-            }
-        }
+      while (true)
+      {
+        Log.Information("Waiting for requests...");
+        var context = listener.GetContext();
+        Task.Run(() => HandleRequestAsync(context));
+      }
     }
+  }
 }

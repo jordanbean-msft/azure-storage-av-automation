@@ -122,6 +122,10 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
           name: 'WINDOWS_DEFENDER_PORT'
           value: '443'
         }
+        {
+          name: 'MANAGED_IDENTITY_CLIENT_ID'
+          value: managedIdentity.properties.clientId
+        }
       ]
     }
   }

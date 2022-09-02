@@ -94,6 +94,12 @@ resource vNet 'Microsoft.Network/virtualNetworks@2022-01-01' = {
           }
         }
       }
+      {
+        name: 'GatewaySubnet'
+        properties: {
+          addressPrefix: '10.0.3.0/24'
+        }
+      }
     ]
   }
 }

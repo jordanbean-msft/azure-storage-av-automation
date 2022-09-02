@@ -20,7 +20,7 @@ resource loadBalancer 'Microsoft.Network/loadBalancers@2021-02-01' = {
   name: loadBalancerName
   location: location
   sku: {
-    name: 'Basic'
+    name: 'Standard'
   }
   properties: {
     frontendIPConfigurations: [
@@ -44,7 +44,7 @@ resource loadBalancer 'Microsoft.Network/loadBalancers@2021-02-01' = {
         name: loadBalancerProbeName
         properties: {
           protocol: 'Tcp'
-          port: 80
+          port: 443
           intervalInSeconds: 15
           numberOfProbes: 4
         }
@@ -64,8 +64,8 @@ resource loadBalancer 'Microsoft.Network/loadBalancers@2021-02-01' = {
             id: resourceId('Microsoft.network/loadBalancers/probes', loadBalancerName, loadBalancerProbeName)
           }
           protocol: 'Tcp'
-          frontendPort: 80
-          backendPort: 80
+          frontendPort: 443
+          backendPort: 443
           idleTimeoutInMinutes: 4
           loadDistribution: 'Default'
         }
