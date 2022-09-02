@@ -1,6 +1,6 @@
 param logAnalyticsWorkspaceName string
 param appInsightsName string
-param orchestrationFunctionAppName string
+param functionUploadSafeFileAppName string
 param location string
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2021-06-01' = {
@@ -18,7 +18,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
     IngestionMode: 'LogAnalytics'
   }
   tags: {
-    'hidden-link:/subscriptions/${subscription().id}/resourceGroups/${resourceGroup().name}/providers/Microsoft.Web/sites/${orchestrationFunctionAppName}': 'Resource'
+    'hidden-link:/subscriptions/${subscription().id}/resourceGroups/${resourceGroup().name}/providers/Microsoft.Web/sites/${functionUploadSafeFileAppName}': 'Resource'
   }
 }
 

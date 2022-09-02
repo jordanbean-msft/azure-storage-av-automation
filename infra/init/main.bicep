@@ -2,13 +2,13 @@ param appName string
 param environment string
 param region string
 param location string = resourceGroup().location
-param computeImageName string
-param computeImageTag string
-param computeMinReplicas int
-param computeMaxReplicas int
-param computeLoopSleepTimeInSeconds string
-param computeCpuResource int
-param computeMemoryResource string
+@secure()
+param vmAdminUsername string
+@secure()
+param vmAdminPassword string
+param addressPrefix string
+param virusScannerSubnetAddressPrefix string
+param vmssVirusScannerInstanceCount int
 
 module names '../resource-names.bicep' = {
   name: 'namesDeployment'
@@ -33,7 +33,7 @@ module loggingDeployment 'logging.bicep' = {
     appInsightsName: names.outputs.appInsightsName
     location: location
     logAnalyticsWorkspaceName: names.outputs.logAnalyticsWorkspaceName
-    orchestrationFunctionAppName: names.outputs.orchestrationFunctionAppName
+    functionUploadSafeFileAppName: names.outputs.functionUploadSafeFileAppName
   }
 }
 
@@ -43,27 +43,53 @@ module storageDeployment 'storage.bicep' = {
     location: location
     newBlobCreatedEventGridTopicName: names.outputs.newBlobCreatedEventGridTopicName
     storageAccountName: names.outputs.storageAccountName
-    storageInputBlobContainerName: names.outputs.storageAccountInputContainerName
-    storageOutputBlobContainerName: names.outputs.storageAccountOutputContainerName
     logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
-    storageInputQueueName: names.outputs.storageInputQueueName
+    storagePotentiallyUnsafeContainerName: names.outputs.storagePotentiallyUnsafeContainerName
+    storageSafeContainerName: names.outputs.storageSafeContainerName
   }
 }
 
-module containerRegistryDeployment 'acr.bicep' = {
-  name: 'containerRegistryDeployment'
+module keyVaultDeployment 'keyVault.bicep' = {
+  name: 'keyVaultDeployment'
   params: {
-    containerRegistryName: names.outputs.containerRegistryName
+    keyVaultName: names.outputs.keyVaultName
     location: location
+    vmAdminPassword: vmAdminPassword
+    vmAdminPasswordSecretName: names.outputs.vmAdminPasswordSecretName
+    vmAdminUsername: vmAdminUsername
+    vmAdminUsernameSecretName: names.outputs.vmAdminUsernameSecretName
     logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
-    managedIdentityName: managedIdentityDeployment.outputs.managedIdentityName
   }
 }
 
-output storageAccountName string = storageDeployment.outputs.storageAccountName
-output storageAccountInputContainerName string = storageDeployment.outputs.inputContainerName
-output storageAccountInputQueueName string = storageDeployment.outputs.inputQueueName
-output storageAccountOutputContainerName string = storageDeployment.outputs.outputContainerName
-output containerRegistryName string = containerRegistryDeployment.outputs.containerRegistryName
-output logAnalyticsWorkspaceName string = loggingDeployment.outputs.logAnalyticsWorkspaceName
-output appInsightsName string = loggingDeployment.outputs.appInsightsName
+module vNetDeployment 'vnet.bicep' = {
+  name: 'vNetDeployment'
+  params: {
+    addressPrefix: addressPrefix
+    location: location
+    nsgVirusScannerName: names.outputs.nsgVirusScannerName
+    virusScannerSubnetAddressPrefix: virusScannerSubnetAddressPrefix
+    virusScannerSubnetName: names.outputs.virusScannerSubnetName
+    vNetName: names.outputs.vNetName
+    logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
+  }
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
+  name: keyVaultDeployment.outputs.keyVaultName
+}
+
+module vmssDeployment 'vmss.bicep' = {
+  name: 'vmssDeployment'
+  params: {
+    loadBalancerName: names.outputs.loadBalancerName
+    location: location
+    virusScannerSubnetName: vNetDeployment.outputs.virusScannerSubnetName
+    vmAdminPasswordSecret: keyVault.getSecret(names.outputs.vmAdminPasswordSecretName)
+    vmAdminUsernameSecret: keyVault.getSecret(names.outputs.vmAdminUsernameSecretName)
+    vmssVirusScannerInstanceCount: vmssVirusScannerInstanceCount
+    vmssVirusScannerName: names.outputs.vmVirusScannerVMScaleSetName
+    vNetName: vNetDeployment.outputs.vNetName
+    logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
+  }
+}

@@ -20,3 +20,7 @@ output vmVirusScannerVMScaleSetName string = 'vmss-virusScanner-${appName}-${reg
 output vNetName string = 'vnet-${appName}-${region}-${env}'
 output virusScannerSubnetName string = 'virus-scanner'
 output nsgVirusScannerName string = 'nsg-virus-scanner'
+output vmAdminUsernameSecretName string = 'vm-admin-username'
+output vmAdminPasswordSecretName string = 'vm-admin-password'
+output keyVaultName string = 'kv-${appName}-${region}-${env}'
+output loadBalancerName string = 'lb-${appName}-${region}-${env}'

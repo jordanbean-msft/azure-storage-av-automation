@@ -3,34 +3,22 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "appName": {
-      "value": "durableFuncAca"
+      "value": "azStorageAv"
     },
     "region": {
-      "value": "eus"
+      "value": "ussc"
     },
     "environment": {
       "value": "dev"
     },
-    "computeImageName": {
-      "value": "compute"
+    "addressPrefix": {
+      "value": "10.0.0.0/24"
     },
-    "computeImageTag": {
-      "value": "1.0.0"
+    "virusScannerSubnetAddressPrefix": {
+      "value": "10.0.0.0/28"
     },
-    "computeMinReplicas": {
+    "vmssVirusScannerInstanceCount": {
       "value": 1
-    },
-    "computeMaxReplicas": {
-      "value": 30
-    },
-    "computeLoopSleepTimeInSeconds": {
-      "value": "5"
-    },
-    "computeCpuResource": {
-      "value": 1
-    },
-    "computeMemoryResource": {
-      "value": "2Gi"
     }
   }
 }
