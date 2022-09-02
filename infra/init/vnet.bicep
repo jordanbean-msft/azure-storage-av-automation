@@ -2,6 +2,10 @@ param vNetName string
 param addressPrefix string
 param virusScannerSubnetName string
 param virusScannerSubnetAddressPrefix string
+param functionAppSubnetName string
+param functionAppSubnetAddressPrefix string
+param uploadBlobStorageAccountSubnetName string
+param uploadBlobStorageAccountAddressPrefix string
 param location string
 param nsgVirusScannerName string
 param logAnalyticsWorkspaceName string
@@ -15,7 +19,32 @@ resource nsgVirusScanner 'Microsoft.Network/networkSecurityGroups@2022-01-01' = 
   location: location
   properties: {
     securityRules: [
-
+      {
+        name: 'Function-VM-Communication-Rule-Inbound'
+        properties: {
+          priority: 100
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Inbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '443'
+        }
+      }
+      {
+        name: 'Function-VM-Communication-Rule-Outbound'
+        properties: {
+          priority: 100
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Outbound'
+          sourceAddressPrefix: 'VirtualNetwork'
+          sourcePortRange: '*'
+          destinationAddressPrefix: 'VirtualNetwork'
+          destinationPortRange: '443'
+        }
+      }
     ]
   }
 }
@@ -34,6 +63,32 @@ resource vNet 'Microsoft.Network/virtualNetworks@2022-01-01' = {
         name: virusScannerSubnetName
         properties: {
           addressPrefix: virusScannerSubnetAddressPrefix
+          networkSecurityGroup: {
+            id: nsgVirusScanner.id
+          }
+        }
+      }
+      {
+        name: functionAppSubnetName
+        properties: {
+          addressPrefix: functionAppSubnetAddressPrefix
+          networkSecurityGroup: {
+            id: nsgVirusScanner.id
+          }
+          delegations: [
+            {
+              name: 'Microsoft.Web.serverFarms'
+              properties: {
+                serviceName: 'Microsoft.Web/serverFarms'
+              }
+            }
+          ]
+        }
+      }
+      {
+        name: uploadBlobStorageAccountSubnetName
+        properties: {
+          addressPrefix: uploadBlobStorageAccountAddressPrefix
           networkSecurityGroup: {
             id: nsgVirusScanner.id
           }
@@ -82,4 +137,6 @@ resource nsgVirusScannerDiagnosticSettings 'Microsoft.Insights/diagnosticSetting
 }
 
 output vNetName string = vNet.name
-output virusScannerSubnetName string = vNet.properties.subnets[0].name
+output virusScannerSubnetName string = virusScannerSubnetName
+output functionAppSubnetName string = functionAppSubnetName
+output uploadBlobStorageAccountSubnetName string = uploadBlobStorageAccountSubnetName

@@ -1,12 +1,24 @@
 param logAnalyticsWorkspaceName string
-param storageAccountName string
+param uploadBlobsStorageAccountName string
 param storagePotentiallyUnsafeContainerName string
 param storageSafeContainerName string
 param location string
 param newBlobCreatedEventGridTopicName string
+param functionAppStorageAccountName string
+param vNetName string
+param functionAppSubnetName string
+param uploadBlobStorageAccountSubnetName string
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
-  name: storageAccountName
+resource functionSubnet 'Microsoft.Network/virtualNetworks/subnets@2022-01-01' existing = {
+  name: '${vNetName}/${functionAppSubnetName}'
+}
+
+resource uploadBlobStorageAccountSubnet 'Microsoft.Network/virtualNetworks/subnets@2022-01-01' existing = {
+  name: '${vNetName}/${uploadBlobStorageAccountSubnetName}'
+}
+
+resource functionAppStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
+  name: functionAppStorageAccountName
   location: location
   sku: {
     name: 'Standard_LRS'
@@ -14,24 +26,68 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   kind: 'StorageV2'
   properties: {
     accessTier: 'Hot'
+    // networkAcls: {
+    //   defaultAction: 'Allow'
+    //   bypass: 'AzureServices'
+    //   virtualNetworkRules: [
+    //     {
+    //       id: functionSubnet.id
+    //     }
+    //   ]
+    // }
+  }
+}
+
+resource uploadBlobsStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
+  name: uploadBlobsStorageAccountName
+  location: location
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+  properties: {
+    accessTier: 'Hot'
+    // networkAcls: {
+    //   defaultAction: 'Allow'
+    //   bypass: 'AzureServices'
+    //   virtualNetworkRules: [
+    //     {
+    //       id: uploadBlobStorageAccountSubnet.id
+    //     }
+    //   ]
+    // }
   }
 }
 
 resource potentiallyUnsafeContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2021-04-01' = {
-  name: '${storageAccount.name}/default/${storagePotentiallyUnsafeContainerName}'
+  name: '${uploadBlobsStorageAccount.name}/default/${storagePotentiallyUnsafeContainerName}'
 }
 
 resource safeContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2021-04-01' = {
-  name: '${storageAccount.name}/default/${storageSafeContainerName}'
+  name: '${uploadBlobsStorageAccount.name}/default/${storageSafeContainerName}'
 }
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2021-06-01' existing = {
   name: logAnalyticsWorkspaceName
 }
 
+resource functionStorageDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'Logging'
+  scope: functionAppStorageAccount
+  properties: {
+    workspaceId: logAnalytics.id
+    metrics: [
+      {
+        category: 'Transaction'
+        enabled: true
+      }
+    ]
+  }
+}
+
 resource storageDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'Logging'
-  scope: storageAccount
+  scope: uploadBlobsStorageAccount
   properties: {
     workspaceId: logAnalytics.id
     metrics: [
@@ -44,7 +100,7 @@ resource storageDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-0
 }
 
 resource storageBlobDiagnosticSettings 'Microsoft.Storage/storageAccounts/blobServices/providers/diagnosticsettings@2017-05-01-preview' = {
-  name: '${storageAccount.name}/default/Microsoft.Insights/Logging'
+  name: '${uploadBlobsStorageAccount.name}/default/Microsoft.Insights/Logging'
   properties: {
     workspaceId: logAnalytics.id
     logs: [
@@ -71,7 +127,7 @@ resource storageBlobDiagnosticSettings 'Microsoft.Storage/storageAccounts/blobSe
 }
 
 resource storageTableDiagnosticSettings 'Microsoft.Storage/storageAccounts/tableServices/providers/diagnosticsettings@2017-05-01-preview' = {
-  name: '${storageAccount.name}/default/Microsoft.Insights/Logging'
+  name: '${uploadBlobsStorageAccount.name}/default/Microsoft.Insights/Logging'
   properties: {
     workspaceId: logAnalytics.id
     logs: [
@@ -98,7 +154,7 @@ resource storageTableDiagnosticSettings 'Microsoft.Storage/storageAccounts/table
 }
 
 resource storageQueueDiagnosticSettings 'Microsoft.Storage/storageAccounts/queueServices/providers/diagnosticsettings@2017-05-01-preview' = {
-  name: '${storageAccount.name}/default/Microsoft.Insights/Logging'
+  name: '${uploadBlobsStorageAccount.name}/default/Microsoft.Insights/Logging'
   properties: {
     workspaceId: logAnalytics.id
     logs: [
@@ -128,7 +184,7 @@ resource blobCreatedEventGridTopic 'Microsoft.EventGrid/systemTopics@2021-06-01-
   name: newBlobCreatedEventGridTopicName
   location: location
   properties: {
-    source: storageAccount.id
+    source: uploadBlobsStorageAccount.id
     topicType: 'Microsoft.Storage.StorageAccounts'
   }
 }
@@ -170,7 +226,8 @@ resource eventGridConnection 'Microsoft.Web/connections@2016-06-01' = {
   }
 }
 
-output storageAccountName string = storageAccount.name
+output uploadBlobsStorageAccountName string = uploadBlobsStorageAccount.name
+output functionAppStorageAccountName string = functionAppStorageAccount.name
 output newBlobCreatedEventGridTopicName string = blobCreatedEventGridTopic.name
 output storagePotentiallyUnsafeContainerName string = storagePotentiallyUnsafeContainerName
 output storageSafeContainerName string = storageSafeContainerName

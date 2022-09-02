@@ -2,22 +2,24 @@ param appInsightsName string
 param logAnalyticsWorkspaceName string
 param functionScanBlobAppName string
 param storagePotentiallyUnsafeContainerName string
-param storageAccountName string
+param functionAppStorageAccountName string
 param functionAppServicePlanName string
 param location string
 param managedIdentityName string
+param vNetName string
+param functionAppSubnetName string
 
 resource appServicePlan 'Microsoft.Web/serverfarms@2021-01-15' = {
   name: functionAppServicePlanName
   location: location
   kind: 'functionapp'
   sku: {
-    name: 'CP1'
+    name: 'EP1'
   }
 }
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' existing = {
-  name: storageAccountName
+resource functionAppStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' existing = {
+  name: functionAppStorageAccountName
 }
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' existing = {
@@ -26,6 +28,10 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' existing = {
 
 resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
   name: managedIdentityName
+}
+
+resource functionAppSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-02-01' existing = {
+  name: '${vNetName}/${functionAppSubnetName}'
 }
 
 resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
@@ -41,15 +47,16 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
   properties: {
     serverFarmId: appServicePlan.id
     siteConfig: {
+      vnetRouteAllEnabled: true
       netFrameworkVersion: 'v6.0'
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${listKeys(resourceId('Microsoft.Storage/storageAccounts', storageAccount.name), '2019-06-01').keys[0].value}'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${functionAppStorageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${listKeys(resourceId('Microsoft.Storage/storageAccounts', functionAppStorageAccount.name), '2019-06-01').keys[0].value}'
         }
         {
           name: 'AZURE_STORAGE_ACCOUNT_NAME'
-          value: storageAccount.name
+          value: functionAppStorageAccount.name
         }
         {
           name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
@@ -71,7 +78,22 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
           value: '1'
         }
+        {
+          name: 'WEBSITE_VNET_ROUTE_ALL'
+          value: '1'
+        }
+        {
+          name: 'WEBSITE_CONTENTOVERVNET'
+          value: '1'
+        }
       ]
+    }
+  }
+  resource functionScanBlobAppFunctionNetworkConfig 'networkConfig@2022-03-01' = {
+    name: 'virtualNetwork'
+    properties: {
+      subnetResourceId: functionAppSubnet.id
+      swiftSupported: true
     }
   }
 }

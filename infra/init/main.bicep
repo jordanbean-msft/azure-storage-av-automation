@@ -8,6 +8,8 @@ param vmAdminUsername string
 param vmAdminPassword string
 param addressPrefix string
 param virusScannerSubnetAddressPrefix string
+param functionAppSubnetAddressPrefix string
+param uploadBlobStorageAccountSubnetAddressPrefix string
 param vmssVirusScannerInstanceCount int
 
 module names '../resource-names.bicep' = {
@@ -42,10 +44,14 @@ module storageDeployment 'storage.bicep' = {
   params: {
     location: location
     newBlobCreatedEventGridTopicName: names.outputs.newBlobCreatedEventGridTopicName
-    storageAccountName: names.outputs.storageAccountName
+    functionAppSubnetName: vNetDeployment.outputs.functionAppSubnetName
+    uploadBlobsStorageAccountName: names.outputs.uploadBlobStorageAccountName
+    functionAppStorageAccountName: names.outputs.functionAppStorageAccountName
+    vNetName: vNetDeployment.outputs.vNetName
     logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
     storagePotentiallyUnsafeContainerName: names.outputs.storagePotentiallyUnsafeContainerName
     storageSafeContainerName: names.outputs.storageSafeContainerName
+    uploadBlobStorageAccountSubnetName: vNetDeployment.outputs.uploadBlobStorageAccountSubnetName
   }
 }
 
@@ -72,6 +78,10 @@ module vNetDeployment 'vnet.bicep' = {
     virusScannerSubnetName: names.outputs.virusScannerSubnetName
     vNetName: names.outputs.vNetName
     logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
+    functionAppSubnetAddressPrefix: functionAppSubnetAddressPrefix
+    functionAppSubnetName: names.outputs.functionAppSubnetName
+    uploadBlobStorageAccountAddressPrefix: uploadBlobStorageAccountSubnetAddressPrefix
+    uploadBlobStorageAccountSubnetName: names.outputs.uploadBlobStorageAccountSubnetName
   }
 }
 
@@ -91,5 +101,21 @@ module vmssDeployment 'vmss.bicep' = {
     vmssVirusScannerName: names.outputs.vmVirusScannerVMScaleSetName
     vNetName: vNetDeployment.outputs.vNetName
     logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
+  }
+}
+
+module functionDeployment 'func.bicep' = {
+  name: 'functionDeployment'
+  params: {
+    appInsightsName: loggingDeployment.outputs.appInsightsName
+    functionAppServicePlanName: names.outputs.functionAppServicePlanName
+    functionScanBlobAppName: names.outputs.functionScanBlobAppName
+    location: location
+    logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
+    managedIdentityName: managedIdentityDeployment.outputs.managedIdentityName
+    functionAppStorageAccountName: storageDeployment.outputs.functionAppStorageAccountName
+    storagePotentiallyUnsafeContainerName: storageDeployment.outputs.storagePotentiallyUnsafeContainerName
+    functionAppSubnetName: vNetDeployment.outputs.functionAppSubnetName
+    vNetName: vNetDeployment.outputs.vNetName
   }
 }
