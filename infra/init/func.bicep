@@ -50,7 +50,7 @@ var functionAppStorageAccountConnectionString = 'DefaultEndpointsProtocol=https;
 resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
   name: functionScanBlobAppName
   location: location
-  kind: 'functionapp,linux'
+  kind: 'functionapp'
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
