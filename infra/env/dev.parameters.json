@@ -25,6 +25,12 @@
     },
     "vmssVirusScannerInstanceCount": {
       "value": 1
+    },
+    "vmInitializationScriptName": {
+      "value": "VMInit.ps1"
+    },
+    "virusScanHttpServerPackageName": {
+      "value": "ScanHttpServer.zip"
     }
   }
 }

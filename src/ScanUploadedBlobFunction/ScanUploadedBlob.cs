@@ -1,32 +1,61 @@
-using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Logging;
-using System.IO;
 using System;
+using Azure.Storage.Blobs;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Extensions.Logging;
+using Azure.Identity;
+using Azure.Storage.Blobs.Models;
+using System.Text;
+using System.Text.Json;
 
 namespace ScanUploadedBlobFunction
 {
-    public static class ScanUploadedBlob
-    {
-        
-        [FunctionName("ScanUploadedBlob")]
-        public static void Run([BlobTrigger("%targetContainerName%/{name}", Connection = "windefenderstorage")] Stream myBlob, string name, ILogger log)
-        {
-            log.LogInformation($"C# Blob trigger ScanUploadedBlob function Processed blob Name:{name} Size: {myBlob.Length} Bytes");
-            
-            var scannerHost = Environment.GetEnvironmentVariable("windowsdefender_host");
-            var scannerPort = Environment.GetEnvironmentVariable("windowsdefender_port");
+  public class ScanUploadedBlob
+  {
+    private readonly ILogger _logger;
 
-            var scanner = new ScannerProxy(log, scannerHost);
-            var scanResults = scanner.Scan(myBlob, name);
-            if (scanResults == null)
-            {
-                return;
-            }
-            log.LogInformation($"Scan Results - {scanResults.ToString(", ")}");
-            log.LogInformation("Handalng Scan Results");
-            var action = new Remediation(scanResults, log);
-            action.Start();
-            log.LogInformation($"ScanUploadedBlob function done Processing blob Name:{name} Size: {myBlob.Length} Bytes");
-        }
+    public ScanUploadedBlob(ILoggerFactory loggerFactory)
+    {
+      _logger = loggerFactory.CreateLogger<ScanUploadedBlob>();
     }
+
+    [Function("ScanUploadedBlob")]
+    public async Task Run([EventGridTrigger] BlobCreatedEvent input)
+    {
+      var blobName = input.Data.Url.Split("/").Last();
+      var blobSize = input.Data.ContentLength.ToString();
+      var blobUrl = input.Data.Url;
+
+      _logger.LogInformation($"Processing blob - Name:{blobName} Size: {blobSize} Bytes");
+
+      var scannerHost = Environment.GetEnvironmentVariable("WINDOWS_DEFNDER_HOST");
+      var scannerPort = Environment.GetEnvironmentVariable("WINDOWS_DEFENDER_PORT");
+
+      var scanner = new ScannerProxy(_logger, scannerHost);
+
+      BlobClient downloadBlobClient = new BlobClient(new Uri(blobUrl),
+                                                     new DefaultAzureCredential(new DefaultAzureCredentialOptions
+                                                     {
+                                                       ManagedIdentityClientId = Environment.GetEnvironmentVariable("ManagedIdentityClientId")
+                                                     }));
+
+      var blobStream = await downloadBlobClient.OpenReadAsync();
+
+      var scanResults = scanner.Scan(blobStream, blobName);
+
+      if (scanResults == null)
+      {
+        return;
+      }
+
+      _logger.LogInformation($"Scan Results - {scanResults.ToString(", ")}");
+      _logger.LogInformation("Handalng Scan Results");
+
+      var action = new Remediation(scanResults, _logger);
+
+      action.Start();
+
+      _logger.LogInformation($"ScanUploadedBlob function done Processing blob Name:{blobName} Size: {blobSize} Bytes");
+    }
+  }
 }

@@ -11,6 +11,8 @@ param virusScannerSubnetAddressPrefix string
 param functionAppSubnetAddressPrefix string
 param uploadBlobStorageAccountSubnetAddressPrefix string
 param vmssVirusScannerInstanceCount int
+param vmInitializationScriptName string
+param virusScanHttpServerPackageName string
 
 module names '../resource-names.bicep' = {
   name: 'namesDeployment'
@@ -52,6 +54,8 @@ module storageDeployment 'storage.bicep' = {
     storagePotentiallyUnsafeContainerName: names.outputs.storagePotentiallyUnsafeContainerName
     storageSafeContainerName: names.outputs.storageSafeContainerName
     uploadBlobStorageAccountSubnetName: vNetDeployment.outputs.uploadBlobStorageAccountSubnetName
+    buildArtifactContainerName: names.outputs.buildArtifactContainerName
+    managedIdentityName: managedIdentityDeployment.outputs.managedIdentityName
   }
 }
 
@@ -85,22 +89,14 @@ module vNetDeployment 'vnet.bicep' = {
   }
 }
 
-resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
-  name: keyVaultDeployment.outputs.keyVaultName
-}
-
-module vmssDeployment 'vmss.bicep' = {
-  name: 'vmssDeployment'
+module loadBalancerDeployment 'load-balancer.bicep' = {
+  name: 'loadBalancerDeployment'
   params: {
     loadBalancerName: names.outputs.loadBalancerName
     location: location
-    virusScannerSubnetName: vNetDeployment.outputs.virusScannerSubnetName
-    vmAdminPasswordSecret: keyVault.getSecret(names.outputs.vmAdminPasswordSecretName)
-    vmAdminUsernameSecret: keyVault.getSecret(names.outputs.vmAdminUsernameSecretName)
-    vmssVirusScannerInstanceCount: vmssVirusScannerInstanceCount
-    vmssVirusScannerName: names.outputs.vmVirusScannerVMScaleSetName
-    vNetName: vNetDeployment.outputs.vNetName
     logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
+    virusScannerSubnetName: vNetDeployment.outputs.virusScannerSubnetName
+    vNetName: vNetDeployment.outputs.vNetName
   }
 }
 
@@ -117,5 +113,8 @@ module functionDeployment 'func.bicep' = {
     storagePotentiallyUnsafeContainerName: storageDeployment.outputs.storagePotentiallyUnsafeContainerName
     functionAppSubnetName: vNetDeployment.outputs.functionAppSubnetName
     vNetName: vNetDeployment.outputs.vNetName
+    loadBalancerName: loadBalancerDeployment.outputs.loadBalancerName
+    storageSafeContainerName: storageDeployment.outputs.storageSafeContainerName
+    uploadBlobsStorageAccountName: storageDeployment.outputs.uploadBlobsStorageAccountName
   }
 }

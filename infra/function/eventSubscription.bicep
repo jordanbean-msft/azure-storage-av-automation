@@ -1,9 +1,9 @@
 param newBlobCreatedEventGridTopicName string
-param orchtestrationFunctionAppName string
-param storageAccountOutputContainerName string
+param functionScanBlobAppName string
+param storagePotentiallyUnsafeContainerName string
 
-resource orchtestrationFunction 'Microsoft.Web/sites@2021-01-15' existing = {
-  name: orchtestrationFunctionAppName
+resource functionScanBlobApp 'Microsoft.Web/sites@2021-01-15' existing = {
+  name: functionScanBlobAppName
 }
 
 resource newBlobCreatedEventSubscription 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2021-06-01-preview' = {
@@ -12,13 +12,13 @@ resource newBlobCreatedEventSubscription 'Microsoft.EventGrid/systemTopics/event
     destination: {
       endpointType: 'AzureFunction'
       properties: {
-        resourceId: '${orchtestrationFunction.id}/functions/ComputeComplete'
+        resourceId: '${functionScanBlobApp.id}/functions/ScanUploadedBlob'
         maxEventsPerBatch: 1
         preferredBatchSizeInKilobytes: 64
       }
     }
     filter: {
-      subjectBeginsWith: '/blobServices/default/containers/${storageAccountOutputContainerName}'
+      subjectBeginsWith: '/blobServices/default/containers/${storagePotentiallyUnsafeContainerName}'
       includedEventTypes: [
         'Microsoft.Storage.BlobCreated'
       ]

@@ -8,81 +8,43 @@ param vmAdminPasswordSecret string
 param vmssVirusScannerInstanceCount int
 param location string
 param loadBalancerName string
-param logAnalyticsWorkspaceName string
+param functionAppStorageAccountName string
+param buildArtifactContainerName string
+param vmInitializationScriptName string
+param virusScanHttpServerPackageName string
+param managedIdentityName string
 
-resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' existing = {
-  name: logAnalyticsWorkspaceName
+resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: managedIdentityName
 }
 
 resource virusScannerSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-02-01' existing = {
   name: '${vNetName}/${virusScannerSubnetName}'
 }
 
-var loadBalancerFrontEndIpConfigurationName = 'LoadBalancerFrontEndIpConfiguration'
-var loadBalancerBackEndAddressPoolName = 'LoadBalancerBackEndAddressPool'
-var loadBalancerProbeName = 'LoadBalancerProbe'
-
-resource loadBalancer 'Microsoft.Network/loadBalancers@2021-02-01' = {
+resource loadBalancer 'Microsoft.Network/loadBalancers@2021-02-01' existing = {
   name: loadBalancerName
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    frontendIPConfigurations: [
-      {
-        name: loadBalancerFrontEndIpConfigurationName
-        properties: {
-          privateIPAllocationMethod: 'Dynamic'
-          subnet: {
-            id: virusScannerSubnet.id
-          }
-        }
-      }
-    ]
-    backendAddressPools: [
-      {
-        name: loadBalancerBackEndAddressPoolName
-      }
-    ]
-    probes: [
-      {
-        name: loadBalancerProbeName
-        properties: {
-          protocol: 'Tcp'
-          port: 80
-          intervalInSeconds: 15
-          numberOfProbes: 4
-        }
-      }
-    ]
-    loadBalancingRules: [
-      {
-        name: 'virusScannerLoadBalancingRule'
-        properties: {
-          frontendIPConfiguration: {
-            id: resourceId('Microsoft.network/loadBalancers/frontendIpConfigurations', loadBalancerName, loadBalancerFrontEndIpConfigurationName)
-          }
-          backendAddressPool: {
-            id: resourceId('Microsoft.network/loadBalancers/backendAddressPools', loadBalancerName, loadBalancerBackEndAddressPoolName)
-          }
-          probe: {
-            id: resourceId('Microsoft.network/loadBalancers/probes', loadBalancerName, loadBalancerProbeName)
-          }
-          protocol: 'Tcp'
-          frontendPort: 80
-          backendPort: 80
-          idleTimeoutInMinutes: 4
-          loadDistribution: 'Default'
-        }
-      }
-    ]
-  }
 }
+
+resource functionAppStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' existing = {
+  name: functionAppStorageAccountName
+}
+
+resource buildArtifactContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2021-04-01' existing = {
+  name: '${functionAppStorageAccountName}/default/${buildArtifactContainerName}'
+}
+
+var buildArtifactContainerUrlPrefix = 'https://${functionAppStorageAccount.name}.blob.core.windows.net/${buildArtifactContainer.name}'
 
 resource vmssVirusScanner 'Microsoft.Compute/virtualMachineScaleSets@2022-03-01' = {
   name: vmssVirusScannerName
   location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentity.id}': {}
+    }
+  }
   sku: {
     name: 'Standard_D2s_v3'
     tier: 'Standard'
@@ -140,6 +102,28 @@ resource vmssVirusScanner 'Microsoft.Compute/virtualMachineScaleSets@2022-03-01'
                   }
                 }
               ]
+            }
+          }
+        ]
+      }
+      extensionProfile: {
+        extensions: [
+          {
+            name: 'virus-scanner-extension'
+            properties: {
+              publisher: 'Microsoft.Compute'
+              type: 'CustomScriptExtension'
+              typeHandlerVersion: '1.10'
+              autoUpgradeMinorVersion: true
+              protectedSettings: {
+                fileUris: [
+                  '${buildArtifactContainerUrlPrefix}/${vmInitializationScriptName}'
+                ]
+                commandToExecute: 'powershell.exe -ExecutionPolicy Bypass -File VMInit.ps1 "${buildArtifactContainerUrlPrefix}/${virusScanHttpServerPackageName}"'
+                managedIdentity: {
+                  clientId: managedIdentity.properties.clientId
+                }
+              }
             }
           }
         ]
@@ -206,19 +190,4 @@ resource autoscalehost 'Microsoft.Insights/autoscalesettings@2021-05-01-preview'
   }
 }
 
-resource loadBalancerDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: 'Logging'
-  scope: loadBalancer
-  properties: {
-    workspaceId: logAnalyticsWorkspace.id
-    metrics: [
-      {
-        category: 'AllMetrics'
-        enabled: true
-      }
-    ]
-  }
-}
-
 output vmssVirusScannerName string = vmssVirusScanner.name
-output loadBalancerName string = loadBalancer.name

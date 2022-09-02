@@ -8,6 +8,8 @@ param functionAppStorageAccountName string
 param vNetName string
 param functionAppSubnetName string
 param uploadBlobStorageAccountSubnetName string
+param buildArtifactContainerName string
+param managedIdentityName string
 
 resource functionSubnet 'Microsoft.Network/virtualNetworks/subnets@2022-01-01' existing = {
   name: '${vNetName}/${functionAppSubnetName}'
@@ -36,6 +38,10 @@ resource functionAppStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01
     //   ]
     // }
   }
+}
+
+resource buildArtifactContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2021-04-01' = {
+  name: '${functionAppStorageAccount.name}/default/${buildArtifactContainerName}'
 }
 
 resource uploadBlobsStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' = {
@@ -223,6 +229,35 @@ resource eventGridConnection 'Microsoft.Web/connections@2016-06-01' = {
       type: 'Microsoft.Web/locations/managedApis'
     }
     displayName: 'azureeventgrid'
+  }
+}
+
+resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = {
+  name: managedIdentityName
+}
+
+resource storageBlobDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
+  scope: subscription()
+  name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+}
+
+resource uploadBlobsRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  scope: uploadBlobsStorageAccount
+  name: guid(uploadBlobsStorageAccount.id, managedIdentity.name, storageBlobDataContributorRoleDefinition.name)
+  properties: {
+    roleDefinitionId: storageBlobDataContributorRoleDefinition.id
+    principalId: managedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource functionAppRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  scope: functionAppStorageAccount
+  name: guid(functionAppStorageAccount.id, managedIdentity.name, storageBlobDataContributorRoleDefinition.name)
+  properties: {
+    roleDefinitionId: storageBlobDataContributorRoleDefinition.id
+    principalId: managedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 

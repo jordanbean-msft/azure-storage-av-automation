@@ -8,6 +8,9 @@ param location string
 param managedIdentityName string
 param vNetName string
 param functionAppSubnetName string
+param storageSafeContainerName string
+param loadBalancerName string
+param uploadBlobsStorageAccountName string
 
 resource appServicePlan 'Microsoft.Web/serverfarms@2021-01-15' = {
   name: functionAppServicePlanName
@@ -16,6 +19,10 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2021-01-15' = {
   sku: {
     name: 'EP1'
   }
+}
+
+resource uploadBlobsStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' existing = {
+  name: uploadBlobsStorageAccountName
 }
 
 resource functionAppStorageAccount 'Microsoft.Storage/storageAccounts@2021-04-01' existing = {
@@ -33,6 +40,12 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-
 resource functionAppSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-02-01' existing = {
   name: '${vNetName}/${functionAppSubnetName}'
 }
+
+resource loadBalancer 'Microsoft.Network/loadBalancers@2021-02-01' existing = {
+  name: loadBalancerName
+}
+
+var functionAppStorageAccountConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${functionAppStorageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${listKeys(resourceId('Microsoft.Storage/storageAccounts', functionAppStorageAccount.name), '2019-06-01').keys[0].value}'
 
 resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
   name: functionScanBlobAppName
@@ -52,11 +65,19 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${functionAppStorageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${listKeys(resourceId('Microsoft.Storage/storageAccounts', functionAppStorageAccount.name), '2019-06-01').keys[0].value}'
+          value: functionAppStorageAccountConnectionString
         }
         {
-          name: 'AZURE_STORAGE_ACCOUNT_NAME'
-          value: functionAppStorageAccount.name
+          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
+          value: functionAppStorageAccountConnectionString
+        }
+        {
+          name: 'WEBSITE_CONTENTSHARE'
+          value: toLower('${functionScanBlobAppName}')
+        }
+        {
+          name: 'AZURE_UPLOAD_BLOBS_STORAGE_ACCOUNT_NAME'
+          value: uploadBlobsStorageAccount.name
         }
         {
           name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
@@ -67,12 +88,16 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
           value: storagePotentiallyUnsafeContainerName
         }
         {
+          name: 'AZURE_STORAGE_SAFE_CONTAINER_NAME'
+          value: storageSafeContainerName
+        }
+        {
           name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~3'
+          value: '~4'
         }
         {
           name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'dotnet'
+          value: 'dotnet-isolated'
         }
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
@@ -85,6 +110,14 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
         {
           name: 'WEBSITE_CONTENTOVERVNET'
           value: '1'
+        }
+        {
+          name: 'WINDOWS_DEFENDER_HOST'
+          value: loadBalancer.properties.frontendIPConfigurations[0].properties.privateIPAddress
+        }
+        {
+          name: 'WINDOWS_DEFENDER_PORT'
+          value: '443'
         }
       ]
     }
