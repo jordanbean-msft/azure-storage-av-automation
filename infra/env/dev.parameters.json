@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "durableFuncAca"
+    },
+    "region": {
+      "value": "eus"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "computeImageName": {
+      "value": "compute"
+    },
+    "computeImageTag": {
+      "value": "1.0.0"
+    },
+    "computeMinReplicas": {
+      "value": 1
+    },
+    "computeMaxReplicas": {
+      "value": 30
+    },
+    "computeLoopSleepTimeInSeconds": {
+      "value": "5"
+    },
+    "computeCpuResource": {
+      "value": 1
+    },
+    "computeMemoryResource": {
+      "value": "2Gi"
+    }
+  }
+}
