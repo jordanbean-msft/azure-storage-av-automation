@@ -15,9 +15,16 @@ param uploadBlobsStorageAccountName string
 resource appServicePlan 'Microsoft.Web/serverfarms@2021-01-15' = {
   name: functionAppServicePlanName
   location: location
-  kind: 'functionapp'
+  kind: 'elastic'
   sku: {
     name: 'EP1'
+    tier: 'ElasticPremium'
+    family: 'EP'
+    size: 'EP1'
+    capacity: 1
+  }
+  properties: {
+    maximumElasticWorkerCount: 20
   }
 }
 
@@ -72,10 +79,6 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
           value: functionAppStorageAccountConnectionString
         }
         {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: uniqueString(functionScanBlobAppName)
-        }
-        {
           name: 'AZURE_UPLOAD_BLOBS_STORAGE_ACCOUNT_NAME'
           value: uploadBlobsStorageAccount.name
         }
@@ -99,18 +102,18 @@ resource functionScanBlobAppFunction 'Microsoft.Web/sites@2021-01-15' = {
           name: 'FUNCTIONS_WORKER_RUNTIME'
           value: 'dotnet-isolated'
         }
-        {
-          name: 'WEBSITE_RUN_FROM_PACKAGE'
-          value: '1'
-        }
-        {
-          name: 'WEBSITE_VNET_ROUTE_ALL'
-          value: '1'
-        }
-        {
-          name: 'WEBSITE_CONTENTOVERVNET'
-          value: '1'
-        }
+        // {
+        //   name: 'WEBSITE_RUN_FROM_PACKAGE'
+        //   value: '1'
+        // }
+        // {
+        //   name: 'WEBSITE_VNET_ROUTE_ALL'
+        //   value: '1'
+        // }
+        // {
+        //   name: 'WEBSITE_CONTENTOVERVNET'
+        //   value: '1'
+        // }
         {
           name: 'WINDOWS_DEFENDER_HOST'
           value: loadBalancer.properties.frontendIPConfigurations[0].properties.privateIPAddress
