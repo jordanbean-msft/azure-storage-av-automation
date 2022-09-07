@@ -1,58 +1,97 @@
 $ErrorActionPreference = "Stop"
 
 #Init
-$ScanHttpServerFolder = "C:\ScanHttpServer\bin"
-$runLoopPath = "$ScanHttpServerFolder\runLoop.ps1"
+$ScanHttpServerRootDirectory = "C:\ScanHttpServer"
+$ScanHttpServerBinDirectory = "$ScanHttpServerRootDirectory\bin"
+$runLoopPath = "$ScanHttpServerBinDirectory\runLoop.ps1"
 
 Start-Transcript -Path C:\VmInit.log
-New-Item -ItemType Directory C:\ScanHttpServer -Force
-New-Item -ItemType Directory $ScanHttpServerFolder -Force
+
+Write-Information "Creating $ScanHttpServerRootDirectory..."
+
+New-Item -ItemType Directory $ScanHttpServerRootDirectory -Force
+
+Write-Information "Created $ScanHttpServerRootDirectory"
+
+Write-Information "Creating $ScanHttpServerBinDirectory..."
+
+New-Item -ItemType Directory $ScanHttpServerBinDirectory -Force
+
+Write-Information "Created $ScanHttpServerBinDirectory"
 
 if ($args.Count -gt 0) {
-  if (-Not (Test-Path $ScanHttpServerFolder\vminit.config)) {
-    New-Item $ScanHttpServerFolder\vminit.config
+  if (-Not (Test-Path $ScanHttpServerBinDirectory\vminit.config)) {
+    Write-Information "Creating $ScanHttpServerBinDirectory\vminit.config. file..."
+
+    New-Item $ScanHttpServerBinDirectory\vminit.config
+    
+    Write-Information "Created $ScanHttpServerBinDirectory\vminit.config. file"
   }
-  Set-Content $ScanHttpServerFolder\vminit.config $args[0]
+  Set-Content $ScanHttpServerBinDirectory\vminit.config $args[0]
 }
 
-$ScanHttpServerBinZipUrl = Get-Content $ScanHttpServerFolder\vminit.config
+$ScanHttpServerBinZipUrl = Get-Content $ScanHttpServerBinDirectory\vminit.config
 
-# Download Http Server bin files
+Write-Information "Retrieving access token using Managed Identity to download $ScanHttpServerBinZipUrl..."
+
 $response = Invoke-WebRequest -Uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fstorage.azure.com%2F' `
-  -Headers @{Metadata = "true" } -UseBasicParsing
+  -Headers @{Metadata = "true" } `
+  -UseBasicParsing
+
+Write-Information "Retrieved access token using Managed Identity to download $ScanHttpServerBinZipUrl"
+
 $content = $response.Content | ConvertFrom-Json
 $access_token = $content.access_token
 
-Invoke-WebRequest $ScanHttpServerBinZipUrl -Headers @{ Authorization = "Bearer $access_token"; "x-ms-version" = "2020-04-08" } -OutFile $ScanHttpServerFolder\ScanHttpServer.zip -UseBasicParsing
+Write-Information "Downloading $ScanHttpServerBinZipUrl..."
 
-Expand-Archive $ScanHttpServerFolder\ScanHttpServer.zip -DestinationPath $ScanHttpServerFolder\ -Force
+Invoke-WebRequest $ScanHttpServerBinZipUrl `
+  -Headers @{ Authorization = "Bearer $access_token"; "x-ms-version" = "2020-04-08" } `
+  -OutFile $ScanHttpServerBinDirectory\ScanHttpServer.zip `
+  -UseBasicParsing
 
-cd $ScanHttpServerFolder
+Write-Information "Downloaded $ScanHttpServerBinZipUrl"
 
-Write-Host Scheduling task for startup
+Expand-Archive $ScanHttpServerBinDirectory\ScanHttpServer.zip -DestinationPath $ScanHttpServerBinDirectory -Force
+
+Set-Location $ScanHttpServerBinDirectory
+
+Write-Information "Scheduling task for startup"
 
 &schtasks /create /tn StartScanHttpServer /sc onstart /tr "powershell.exe C:\ScanHttpServer\bin\runLoop.ps1"  /NP /DELAY 0001:00 /RU SYSTEM
 
-Write-Host Creating and adding certificate
+Write-Information "Creating and adding certificate..."
 
 $cert = New-SelfSignedCertificate -DnsName ScanServerCert -CertStoreLocation "Cert:\LocalMachine\My"
 $thumb = $cert.Thumbprint
 $appGuid = '{' + [guid]::NewGuid().ToString() + '}'
 
-Write-Host successfully created new certificate $cert
+Write-Information "Successfully created new certificate $cert"
+
+Write-Information "Adding netsh Rules..."
 
 netsh http delete sslcert ipport=0.0.0.0:443
 netsh http add sslcert ipport=0.0.0.0:443 appid=$appGuid certhash="$thumb"
 
-Write-Host Adding firewall rules
+Write-Information "Added netsh Rules..."
+
+Write-Information "Adding Firewall Rules..."
+
 New-NetFirewallRule -DisplayName "ServerFunctionComunicationIn" -Direction Inbound -LocalPort 443 -Protocol TCP -Action Allow
 New-NetFirewallRule -DisplayName "ServerFunctionComunicationOut" -Direction Outbound -LocalPort 443 -Protocol TCP -Action Allow
 
-#Updating antivirus Signatures
-Write-Host Updating Signatures for the antivirus
+Write-Information "Added Firewall Rules"
+
+Write-Information "Updating Signatures for Windows Defender..."
+
 & "C:\Program Files\Windows Defender\MpCmdRun.exe" -SignatureUpdate
-#Running the App
-Write-Host Starting Run-Loop
-start-process powershell -verb runas -ArgumentList $runLoopPath
+
+Write-Information "Updated Signatures for Windows Defender"
+
+Write-Information "Starting RunLoop..."
+
+Start-Process powershell -Verb runas -ArgumentList $runLoopPath
+
+Write-Information "Started RunLoop"
 
 Stop-Transcript
